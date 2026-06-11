@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+<title>Holo Card Studio v0.3</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Noto+Sans+KR:wght@400;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+html, body {
+  height: 100%;
+  background: radial-gradient(ellipse at 50% 30%, #161228 0%, #060810 70%);
+  font-family: 'Noto Sans KR', sans-serif;
+  color: #e0e0e8;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+}
+.step { position: fixed; inset: 0; display: none; }
+.step.active { display: flex; }
+
+/* ── STEP 1: 업로드 ── */
+#step-upload {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 24px;
+}
+.app-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 22px; font-weight: 700; letter-spacing: 3px;
+  color: rgba(255,255,255,0.85);
+}
+.app-sub { font-size: 11px; color: rgba(255,255,255,0.3); letter-spacing: 1px; }
+
+.slot-grid {
+  display: flex;
+  gap: 12px;
+  width: min(560px, 90vw);
+}
+.up-slot {
+  flex: 1;
+  aspect-ratio: 3/4.2;
+  max-height: 40vh;
+  border: 2px dashed rgba(127,119,221,0.35);
+  border-radius: 14px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px;
+  color: rgba(255,255,255,0.35);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.up-slot:hover, .up-slot.over {
+  border-color: #7F77DD;
+  background: rgba(127,119,221,0.08);
+  color: rgba(255,255,255,0.6);
+}
+.up-slot.loaded { border-style: solid; border-color: rgba(29,158,117,0.55); }
+.up-slot .ico { font-size: 26px; opacity: 0.5; }
+.up-slot .req {
+  font-size: 9px;
+  color: rgba(255,200,80,0.5);
+}
+.up-slot .opt {
+  font-size: 9px;
+  color: rgba(255,255,255,0.22);
+}
+.up-slot .thumb {
+  position: absolute; inset: 0;
+  background-size: cover;
+  background-position: center top;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.up-slot.loaded .thumb { opacity: 1; }
+.up-slot .thumb::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, transparent 55%, rgba(6,8,16,0.85) 100%);
+}
+.up-slot .slot-name {
+  position: relative;
+  z-index: 2;
+}
+.up-slot.loaded .slot-name {
+  position: absolute;
+  bottom: 10px; left: 0; right: 0;
+  color: #5DCAA5;
+  font-size: 11px;
+}
+.up-slot.loaded .ico,
+.up-slot.loaded .req,
+.up-slot.loaded .opt { display: none; }
+
+.btn-primary {
+  font-size: 14px; font-weight: 700;
+  padding: 13px 42px;
+  border-radius: 26px;
+  border: none;
+  background: linear-gradient(135deg, #7F77DD, #5a50c8);
+  color: #fff;
+  cursor: pointer;
+  font-family: 'Noto Sans KR', sans-serif;
+  box-shadow: 0 4px 18px rgba(127,119,221,0.35);
+  transition: transform 0.15s, opacity 0.2s;
+}
+.btn-primary:active { transform: scale(0.96); }
+.btn-primary:disabled { opacity: 0.3; cursor: default; }
+.upload-hint {
+  font-size: 10px;
+  color: rgba(255,255,255,0.25);
+  text-align: center;
+  line-height: 1.8;
+}
+
+/* ── STEP 2: 뷰어 ── */
+#step-viewer { align-items: center; justify-content: center; perspective: 1000px; }
+#stage { position: relative; transform-style: preserve-3d; will-change: transform; }
+#pixi-canvas { width: 100%; height: 100%; display: block; border-radius: 14px; }
+.card-shadow {
+  position: absolute; inset: 12px -6px -16px -6px;
+  border-radius: 26px;
+  background: rgba(0,0,0,0.55);
+  filter: blur(26px);
+  z-index: -1;
+}
+#fab {
+  position: fixed;
+  right: 18px;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  width: 46px; height: 46px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(20,20,34,0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: rgba(255,255,255,0.7);
+  font-size: 19px;
+  display: none;
+  align-items: center; justify-content: center;
+  cursor: pointer; z-index: 50;
+}
+#fab.show { display: flex; }
+#backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.4);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s; z-index: 60;
+}
+#backdrop.show { opacity: 1; pointer-events: auto; }
+#sheet {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  background: rgba(18,18,30,0.93);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 22px 22px 0 0;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  padding: 10px 22px calc(26px + env(safe-area-inset-bottom));
+  transform: translateY(105%);
+  transition: transform 0.32s cubic-bezier(0.32,0.72,0,1);
+  z-index: 70; max-height: 74vh; overflow-y: auto;
+}
+#sheet.show { transform: translateY(0); }
+.sheet-handle { width: 38px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; margin: 4px auto 16px; }
+.ctrl-section { display: flex; flex-direction: column; gap: 7px; margin-bottom: 16px; }
+.ctrl-label { font-size: 9px; letter-spacing: 2px; color: rgba(255,255,255,0.28); font-family: 'Rajdhani', sans-serif; text-transform: uppercase; }
+.btn-row { display: flex; gap: 7px; flex-wrap: wrap; }
+.chip {
+  font-size: 12px; padding: 8px 16px; border-radius: 22px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.45);
+  cursor: pointer; font-family: 'Noto Sans KR', sans-serif;
+}
+.chip.on { background: rgba(127,119,221,0.28); border-color: #7F77DD; color: #c5c0ff; }
+.sliders { display: flex; flex-direction: column; gap: 12px; }
+.slider-row { display: flex; align-items: center; gap: 12px; font-size: 11px; }
+.slider-row label { width: 88px; font-family: 'Rajdhani', sans-serif; letter-spacing: 1px; color: rgba(255,255,255,0.45); }
+.slider-row input[type=range] { flex: 1; height: 4px; -webkit-appearance: none; background: rgba(255,255,255,0.12); border-radius: 2px; }
+.slider-row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #8F87E8; cursor: pointer; }
+.slider-row .val { width: 34px; text-align: right; font-family: 'Rajdhani', sans-serif; color: rgba(255,255,255,0.55); }
+.err-box {
+  position: fixed; left: 50%; bottom: 24px;
+  transform: translateX(-50%);
+  background: rgba(180,50,50,0.92);
+  color: #fff; font-size: 11px;
+  padding: 10px 18px; border-radius: 12px;
+  z-index: 100; max-width: 86vw; line-height: 1.5;
+  display: none;
+}
+</style>
+</head>
+<body>
+
+<!-- STEP 1: 3레이어 업로드 -->
+<div class="step active" id="step-upload">
+  <div class="app-title">HOLO CARD STUDIO</div>
+  <div class="app-sub">레이어 3장으로 홀로그래픽 카드 만들기</div>
+
+  <div class="slot-grid">
+    <div class="up-slot" id="slot-bg">
+      <div class="thumb"></div>
+      <span class="ico">🌄</span>
+      <span class="slot-name">배경</span>
+      <span class="req">필수</span>
+      <input type="file" accept="image/*" style="display:none"/>
+    </div>
+    <div class="up-slot" id="slot-char">
+      <div class="thumb"></div>
+      <span class="ico">🧍</span>
+      <span class="slot-name">캐릭터</span>
+      <span class="opt">선택 · 투명 PNG</span>
+      <input type="file" accept="image/*" style="display:none"/>
+    </div>
+    <div class="up-slot" id="slot-frame">
+      <div class="thumb"></div>
+      <span class="ico">🖼️</span>
+      <span class="slot-name">테두리</span>
+      <span class="opt">선택 · 투명 PNG</span>
+      <input type="file" accept="image/*" style="display:none"/>
+    </div>
+  </div>
+
+  <button class="btn-primary" id="btn-run" disabled>카드 생성 ✦</button>
+
+  <p class="upload-hint">
+    캐릭터·테두리는 배경이 투명한 PNG로 준비하세요<br>
+    탭해서 선택하거나 드래그&드롭 · 로드 후 다시 탭하면 교체
+  </p>
+</div>
+
+<!-- STEP 2: 뷰어 -->
+<div class="step" id="step-viewer">
+  <div id="stage">
+    <div class="card-shadow"></div>
+    <canvas id="pixi-canvas"></canvas>
+  </div>
+</div>
+
+<button id="fab">⚙</button>
+<div id="backdrop"></div>
+<div id="sheet">
+  <div class="sheet-handle"></div>
+  <div class="ctrl-section">
+    <span class="ctrl-label">Mode</span>
+    <div class="btn-row">
+      <button class="chip on" id="m-mouse">터치</button>
+      <button class="chip" id="m-gyro">자이로</button>
+      <button class="chip" id="m-spin">자동회전</button>
+    </div>
+  </div>
+  <div class="ctrl-section">
+    <span class="ctrl-label">Tuning</span>
+    <div class="sliders">
+      <div class="slider-row"><label>Parallax</label><input type="range" min="0" max="200" value="100" id="s-px"/><span class="val" id="v-px">100</span></div>
+      <div class="slider-row"><label>Tilt Angle</label><input type="range" min="0" max="200" value="100" id="s-tilt"/><span class="val" id="v-tilt">100</span></div>
+      <div class="slider-row"><label>Holo Border</label><input type="range" min="0" max="200" value="100" id="s-holo"/><span class="val" id="v-holo">100</span></div>
+      <div class="slider-row"><label>Glare</label><input type="range" min="0" max="200" value="100" id="s-glare"/><span class="val" id="v-glare">100</span></div>
+      <div class="slider-row"><label>Sparkles</label><input type="range" min="0" max="200" value="100" id="s-spark"/><span class="val" id="v-spark">100</span></div>
+      <div class="slider-row"><label>Char Scale</label><input type="range" min="80" max="140" value="106" id="s-chs"/><span class="val" id="v-chs">106</span></div>
+      <div class="slider-row"><label>Char Y</label><input type="range" min="-100" max="100" value="0" id="s-chy"/><span class="val" id="v-chy">0</span></div>
+    </div>
+  </div>
+  <div class="ctrl-section">
+    <div class="btn-row">
+      <button class="chip" id="btn-new">레이어 다시 올리기</button>
+    </div>
+  </div>
+</div>
+
+<div class="err-box" id="err-box"></div>
+
+<script type="importmap">
+{ "imports": { "pixi.js": "https://cdn.jsdelivr.net/npm/pixi.js@8.6.6/dist/pixi.mjs" } }
+</script>
+
+<script type="module">
+import { Application, Container, Sprite, Graphics, Assets, Filter, GlProgram } from 'pixi.js';
+
+const $ = id => document.getElementById(id);
+function showErr(msg, ms = 6000) {
+  const e = $('err-box');
+  e.textContent = msg; e.style.display = 'block';
+  setTimeout(() => e.style.display = 'none', ms);
+}
+function showStep(name) {
+  ['upload','viewer'].forEach(s => $('step-'+s).classList.toggle('active', s === name));
+  $('fab').classList.toggle('show', name === 'viewer');
+}
+
+/* ═══════════════ STEP 1: 3슬롯 업로드 ═══════════════ */
+const imgs = { bg: null, char: null, frame: null };
+
+function setupSlot(key) {
+  const slot = $('slot-' + key);
+  const input = slot.querySelector('input');
+  slot.addEventListener('click', () => input.click());
+  input.addEventListener('change', e => { if (e.target.files[0]) loadSlot(key, e.target.files[0]); });
+  slot.addEventListener('dragover', e => { e.preventDefault(); slot.classList.add('over'); });
+  slot.addEventListener('dragleave', () => slot.classList.remove('over'));
+  slot.addEventListener('drop', e => {
+    e.preventDefault(); slot.classList.remove('over');
+    if (e.dataTransfer.files[0]) loadSlot(key, e.dataTransfer.files[0]);
+  });
+}
+function loadSlot(key, file) {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    imgs[key] = img;
+    const slot = $('slot-' + key);
+    slot.classList.add('loaded');
+    slot.querySelector('.thumb').style.backgroundImage = `url(${url})`;
+    $('btn-run').disabled = !imgs.bg;
+  };
+  img.onerror = () => showErr('이미지를 불러올 수 없어요.');
+  img.src = url;
+}
+['bg','char','frame'].forEach(setupSlot);
+
+$('btn-run').addEventListener('click', async () => {
+  try {
+    await launchViewer();
+    showStep('viewer');
+  } catch (err) {
+    console.error(err);
+    showErr('뷰어 실행 실패: ' + (err.message || err), 8000);
+  }
+});
+
+/* ═══════════════ STEP 2: 홀로 뷰어 ═══════════════ */
+let app = null;
+const stageEl = $('stage');
+let CARD_W = 300, CARD_H = 420;
+let bgSprite = null, charSprite = null, frameSprite = null, sparkLayer = null, holoFilter = null;
+let sparks = [];
+let mode = 'mouse';
+let pxMul = 1, tiltMul = 1, holoMul = 1, glareMul = 1, sparkMul = 1;
+let chScaleMul = 1.06, chYOff = 0;
+let spinA = 0;
+let cur = { rx:0, ry:0, px:0.5, py:0.5 }, tgt = { rx:0, ry:0, px:0.5, py:0.5 };
+
+function vpSize() {
+  if (window.visualViewport) return { w: window.visualViewport.width, h: window.visualViewport.height };
+  return { w: window.innerWidth, h: window.innerHeight };
+}
+function fitStage() {
+  if (!app) return;
+  const { w, h } = vpSize();
+  const s = Math.min(w*0.90 / CARD_W, h*0.90 / CARD_H);
+  stageEl.style.width  = (CARD_W*s) + 'px';
+  stageEl.style.height = (CARD_H*s) + 'px';
+  const cv = $('pixi-canvas');
+  cv.style.width = '100%';
+  cv.style.height = '100%';
+}
+window.addEventListener('resize', fitStage);
+window.addEventListener('orientationchange', () => setTimeout(fitStage, 250));
+if (window.visualViewport) window.visualViewport.addEventListener('resize', fitStage);
+
+function imgToTexSource(img) {
+  // Image → 캔버스 → dataURL (Pixi 로드용)
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth; c.height = img.naturalHeight;
+  c.getContext('2d').drawImage(img, 0, 0);
+  return c.toDataURL('image/png');
+}
+
+function applyCharTransform() {
+  if (!charSprite) return;
+  const tex = charSprite.texture;
+  const sc = Math.max(CARD_W/tex.width, CARD_H/tex.height) * chScaleMul;
+  charSprite.scale.set(sc);
+  // 상단 정렬 기본 + Y 오프셋
+  charSprite.baseY = (sc*tex.height - CARD_H)/2 + chYOff;
+}
+
+async function launchViewer() {
+  // 카드 비율: 테두리 > 배경 순으로 기준
+  const ratioSrc = imgs.frame || imgs.bg;
+  CARD_W = 300;
+  CARD_H = Math.round(300 * ratioSrc.naturalHeight / ratioSrc.naturalWidth);
+
+  if (app) { app.destroy(true, { children: true }); app = null; }
+  app = new Application();
+  await app.init({
+    canvas: $('pixi-canvas'),
+    width: CARD_W, height: CARD_H,
+    backgroundAlpha: 0, antialias: true,
+    resolution: Math.min(window.devicePixelRatio || 1, 3),
+    autoDensity: true,
+  });
+  fitStage();
+  setTimeout(fitStage, 300);
+
+  const root = new Container();
+  root.x = CARD_W/2; root.y = CARD_H/2;
+  app.stage.addChild(root);
+  const mask = new Graphics().roundRect(-CARD_W/2, -CARD_H/2, CARD_W, CARD_H, 14).fill(0xffffff);
+  root.addChild(mask);
+  root.mask = mask;
+  root.sortableChildren = true;
+
+  /* 배경 (필수) */
+  const bgTex = await Assets.load(imgToTexSource(imgs.bg));
+  bgSprite = new Sprite(bgTex);
+  bgSprite.anchor.set(0.5);
+  bgSprite.scale.set(Math.max(CARD_W/bgTex.width, CARD_H/bgTex.height) * 1.14);
+  bgSprite.zIndex = 0;
+  root.addChild(bgSprite);
+
+  /* 캐릭터 (선택) */
+  charSprite = null;
+  if (imgs.char) {
+    const charTex = await Assets.load(imgToTexSource(imgs.char));
+    charSprite = new Sprite(charTex);
+    charSprite.anchor.set(0.5, 0.5);
+    charSprite.zIndex = 2;
+    charSprite.baseY = 0;
+    applyCharTransform();
+    root.addChild(charSprite);
+  }
+
+  /* 테두리 (선택) */
+  frameSprite = null;
+  if (imgs.frame) {
+    const frameTex = await Assets.load(imgToTexSource(imgs.frame));
+    frameSprite = new Sprite(frameTex);
+    frameSprite.anchor.set(0.5);
+    frameSprite.width = CARD_W;
+    frameSprite.height = CARD_H;
+    frameSprite.zIndex = 3;
+    root.addChild(frameSprite);
+  }
+
+  /* 홀로 셰이더 */
+  const holoVert = `
+    in vec2 aPosition; out vec2 vTextureCoord;
+    uniform vec4 uInputSize; uniform vec4 uOutputFrame; uniform vec4 uOutputTexture;
+    vec4 filterVertexPosition(void){
+      vec2 position = aPosition * uOutputFrame.zw + uOutputFrame.xy;
+      position.x = position.x * (2.0/uOutputTexture.x) - 1.0;
+      position.y = position.y * (2.0*uOutputTexture.z/uOutputTexture.y) - uOutputTexture.z;
+      return vec4(position, 0.0, 1.0);
+    }
+    vec2 filterTextureCoord(void){ return aPosition * (uOutputFrame.zw * uInputSize.zw); }
+    void main(void){ gl_Position = filterVertexPosition(); vTextureCoord = filterTextureCoord(); }
+  `;
+  const holoFrag = `
+    precision highp float;
+    in vec2 vTextureCoord; out vec4 finalColor;
+    uniform sampler2D uTexture;
+    uniform vec2 uTilt; uniform float uTime;
+    uniform float uBorderStrength; uniform float uGlareStrength;
+    uniform vec2 uPointer;
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+    float vnoise(vec2 p){
+      vec2 i = floor(p), f = fract(p);
+      f = f*f*(3.0-2.0*f);
+      return mix(mix(hash(i), hash(i+vec2(1,0)), f.x),
+                 mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y);
+    }
+    float fbm(vec2 p){
+      float v = 0.0, a = 0.5;
+      for(int i=0;i<4;i++){ v += a*vnoise(p); p *= 2.1; a *= 0.5; }
+      return v;
+    }
+    vec3 hsv2rgb(vec3 c){
+      vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
+      vec3 p = abs(fract(c.xxx+K.xyz)*6.0-K.www);
+      return c.z * mix(K.xxx, clamp(p-K.xxx,0.0,1.0), c.y);
+    }
+    void main(void){
+      vec4 src = texture(uTexture, vTextureCoord);
+      vec2 uv = vTextureCoord;
+      vec2 edge = min(uv, 1.0-uv);
+      float borderMask = 1.0 - smoothstep(0.018, 0.05, min(edge.x, edge.y));
+      vec2 flowUv = uv*7.0 + uTilt*1.6 + vec2(uTime*0.03, -uTime*0.02);
+      float n = fbm(flowUv);
+      float n2 = fbm(flowUv*1.7 + n*2.4);
+      float hue = fract(n2*1.4 + uTilt.x*0.35 + uTilt.y*0.2);
+      vec3 irid = hsv2rgb(vec3(hue, 0.55, 0.7 + n*0.3));
+      float lum = dot(src.rgb, vec3(0.299, 0.587, 0.114));
+      vec3 result = src.rgb + irid * borderMask * uBorderStrength * lum * 0.55;
+      float angle = uTilt.x*0.9 + uTilt.y*0.5;
+      float streak = uv.x*cos(angle) + uv.y*sin(angle);
+      float band = pow(abs(sin(streak*2.6 + (uTilt.x+uTilt.y)*1.8)), 14.0);
+      result += vec3(band) * uGlareStrength * 0.16;
+      float d = length(uv - uPointer);
+      result += vec3(exp(-d*3.2)) * uGlareStrength * 0.2;
+      finalColor = vec4(result, src.a);
+    }
+  `;
+  holoFilter = new Filter({
+    glProgram: GlProgram.from({ vertex: holoVert, fragment: holoFrag }),
+    resources: {
+      holoUniforms: {
+        uTilt: { value: new Float32Array([0,0]), type: 'vec2<f32>' },
+        uTime: { value: 0, type: 'f32' },
+        uBorderStrength: { value: 1.0, type: 'f32' },
+        uGlareStrength: { value: 0.0, type: 'f32' },
+        uPointer: { value: new Float32Array([0.5,0.5]), type: 'vec2<f32>' },
+      }
+    }
+  });
+  root.filters = [holoFilter];
+
+  /* 스파클 */
+  sparkLayer = new Container();
+  sparkLayer.zIndex = 5;
+  root.addChild(sparkLayer);
+  sparks = [];
+  for (let i = 0; i < 26; i++) {
+    const size = 2 + Math.random()*5, w2 = size*0.22;
+    const g = new Graphics();
+    g.poly([0,-size, w2,-w2, size,0, w2,w2, 0,size, -w2,w2, -size,0, -w2,-w2])
+     .fill({ color: [0xffffff, 0xfff2c0, 0xc8f4ff][i%3] });
+    g.x = (Math.random()-0.5)*CARD_W*0.88;
+    g.y = (Math.random()-0.5)*CARD_H*0.88;
+    g.alpha = 0;
+    sparkLayer.addChild(g);
+    sparks.push({ g, phase: Math.random()*Math.PI*2, speed: 0.5+Math.random()*1.2, rot: (Math.random()-0.5)*0.02 });
+  }
+
+  /* 틱 */
+  const U = holoFilter.resources.holoUniforms.uniforms;
+  app.ticker.add(() => {
+    U.uTime = performance.now()/1000;
+    if (mode === 'spin') {
+      spinA += 0.55;
+      const ry = Math.sin(spinA*Math.PI/180)*20;
+      const rx = Math.sin(spinA*0.62*Math.PI/180)*9;
+      tgt = { rx, ry, px: (ry+20)/40, py: (rx+9)/18 };
+    }
+    const L = 0.15;
+    cur.rx += (tgt.rx-cur.rx)*L; cur.ry += (tgt.ry-cur.ry)*L;
+    cur.px += (tgt.px-cur.px)*L; cur.py += (tgt.py-cur.py)*L;
+    const { rx, ry, px, py } = cur;
+    stageEl.style.transform = `rotateX(${rx*tiltMul}deg) rotateY(${ry*tiltMul}deg)`;
+    const dx = px-0.5, dy = py-0.5;
+    bgSprite.position.set(dx*-20*pxMul, dy*-16*pxMul);
+    if (charSprite) charSprite.position.set(dx*8*pxMul, charSprite.baseY + dy*5*pxMul);
+    sparkLayer.position.set(dx*13*pxMul, dy*10*pxMul);
+    U.uTilt[0] = dx*2; U.uTilt[1] = dy*2;
+    U.uPointer[0] = px; U.uPointer[1] = py;
+    U.uBorderStrength = holoMul;
+    const activity = Math.min(1, (Math.abs(rx)+Math.abs(ry))/16);
+    U.uGlareStrength = activity * glareMul;
+    const t = performance.now()/1000;
+    sparks.forEach(s => {
+      const tw = Math.pow(Math.abs(Math.sin(t*s.speed + s.phase)), 3);
+      s.g.alpha = tw * activity * sparkMul * 0.95;
+      s.g.rotation += s.rot;
+      s.g.scale.set(0.6 + tw*0.5);
+    });
+  });
+}
+
+/* ═══════════════ 입력 ═══════════════ */
+const cv = $('pixi-canvas');
+function fromPointer(cx, cy) {
+  const r = cv.getBoundingClientRect();
+  const px = Math.max(0, Math.min(1, (cx-r.left)/r.width));
+  const py = Math.max(0, Math.min(1, (cy-r.top)/r.height));
+  tgt = { rx: -(py-0.5)*24, ry: (px-0.5)*24, px, py };
+}
+cv.addEventListener('mousemove', e => { if(mode==='mouse') fromPointer(e.clientX, e.clientY); });
+cv.addEventListener('mouseleave', () => { if(mode==='mouse') tgt = { rx:0, ry:0, px:0.5, py:0.5 }; });
+cv.addEventListener('touchmove', e => {
+  if(mode!=='mouse') return;
+  e.preventDefault();
+  fromPointer(e.touches[0].clientX, e.touches[0].clientY);
+}, { passive: false });
+cv.addEventListener('touchend', () => { if(mode==='mouse') tgt = { rx:0, ry:0, px:0.5, py:0.5 }; });
+
+function handleGyro(e) {
+  if (mode !== 'gyro') return;
+  const b = Math.max(-26, Math.min(26, (e.beta||0)-40));
+  const g = Math.max(-26, Math.min(26, e.gamma||0));
+  tgt = { rx: -b*0.8, ry: g*0.8, px: (g+26)/52, py: (b+26)/52 };
+}
+function setMode(m) {
+  mode = m;
+  ['mouse','gyro','spin'].forEach(x => $('m-'+x).classList.toggle('on', x===m));
+  window.removeEventListener('deviceorientation', handleGyro);
+  if (m === 'gyro') {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      DeviceOrientationEvent.requestPermission().then(r => {
+        if (r === 'granted') { window.addEventListener('deviceorientation', handleGyro); closeSheet(); }
+        else { showErr('자이로 권한 거부됨. Safari 완전 종료 후 재시도하세요.'); setMode('mouse'); }
+      }).catch(() => { showErr('자이로 실패 — HTTPS 접속인지 확인하세요.'); setMode('mouse'); });
+    } else {
+      window.addEventListener('deviceorientation', handleGyro);
+      closeSheet();
+    }
+  } else if (m !== 'spin') {
+    tgt = { rx:0, ry:0, px:0.5, py:0.5 };
+  }
+}
+$('m-mouse').addEventListener('click', () => setMode('mouse'));
+$('m-gyro').addEventListener('click', () => setMode('gyro'));
+$('m-spin').addEventListener('click', () => setMode('spin'));
+
+function bindSlider(id, valId, cb) {
+  const el = $(id);
+  el.addEventListener('input', () => {
+    $(valId).textContent = el.value;
+    cb(parseInt(el.value));
+  });
+}
+bindSlider('s-px','v-px',     v => pxMul = v/100);
+bindSlider('s-tilt','v-tilt', v => tiltMul = v/100);
+bindSlider('s-holo','v-holo', v => holoMul = v/100);
+bindSlider('s-glare','v-glare', v => glareMul = v/100);
+bindSlider('s-spark','v-spark', v => sparkMul = v/100);
+bindSlider('s-chs','v-chs',   v => { chScaleMul = v/100; applyCharTransform(); });
+bindSlider('s-chy','v-chy',   v => { chYOff = v; applyCharTransform(); });
+
+/* 바텀시트 */
+const sheet = $('sheet'), backdrop = $('backdrop');
+function closeSheet() { sheet.classList.remove('show'); backdrop.classList.remove('show'); }
+$('fab').addEventListener('click', () => {
+  const open = sheet.classList.contains('show');
+  open ? closeSheet() : (sheet.classList.add('show'), backdrop.classList.add('show'));
+});
+backdrop.addEventListener('click', closeSheet);
+$('btn-new').addEventListener('click', () => { closeSheet(); showStep('upload'); });
+
+console.log('✓ Holo Card Studio v0.3 ready');
+</script>
+</body>
+</html>
